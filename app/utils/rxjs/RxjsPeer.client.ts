@@ -324,6 +324,15 @@ export class RxjsPeer {
 					direction: 'sendonly',
 				})
 				console.debug('🌱 creating transceiver!')
+				// FIXME nils: this only get called for E2E encrypted calls!
+				if (track.kind == 'video') {
+					const capability = RTCRtpSender.getCapabilities('video')
+					const codecs = capability ? capability.codecs : []
+					const vp9codec = codecs.filter(
+						(a) => a.mimeType === 'video/VP9' || a.mimeType === 'video/rtx'
+					)
+					transceiver.setCodecPreferences(vp9codec)
+				}
 
 				return {
 					transceiver,
