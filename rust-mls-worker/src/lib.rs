@@ -275,7 +275,7 @@ async fn process_stream<F>(
 }
 
 /// The proportion of incoming packets we want to intentionally drop for testing purposes
-const LOSSINESS: f64 = 0.10; // 10%
+const LOSSINESS: f64 = 0.03; // 3%
 
 /// Same as `process_stream` but drops `LOSSINESS` fraction of packets
 async fn lossy_process_stream<F>(
