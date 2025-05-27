@@ -1,6 +1,7 @@
 use log::{info, Level};
 use mls_ops::{decrypt_msg, encrypt_msg, WelcomePackageOut, WorkerResponse};
 use openmls::prelude::tls_codec::Serialize;
+use rand::Rng;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -83,7 +84,8 @@ pub async fn processEvent(event: Object) -> JsValue {
             if ty == "encryptStream" {
                 process_stream(reader, writer, encrypt_msg).await;
             } else {
-                process_stream(reader, writer, decrypt_msg).await;
+                // Lossily process incoming streams
+                lossy_process_stream(reader, writer, decrypt_msg).await;
             }
 
             // No response necessary if we're just writing between two streams
@@ -254,6 +256,59 @@ async fn process_stream<F>(
 
         // Read a frame and get the underlying bytestring
         let frame = obj_get(&res, &"value".into()).unwrap();
+
+        // Process the frame data
+        let frame_data = get_frame_data(&frame);
+        let new_frame_data = f(&frame_data);
+
+        // Set the new frame data value
+        set_frame_data(&frame, &new_frame_data);
+
+        // Write the read chunk to the writable stream. This promise returns nothing
+        let promise = writer.write_with_chunk(&frame);
+        JsFuture::from(promise).await.unwrap();
+
+        if done_reading {
+            break;
+        }
+    }
+}
+
+/// The proportion of incoming packets we want to intentionally drop for testing purposes
+const LOSSINESS: f64 = 0.10; // 10%
+
+/// Same as `process_stream` but drops `LOSSINESS` fraction of packets
+async fn lossy_process_stream<F>(
+    reader: ReadableStreamDefaultReader,
+    writer: WritableStreamDefaultWriter,
+    f: F,
+) where
+    F: Fn(&[u8]) -> Vec<u8>,
+{
+    let mut rng = rand::thread_rng();
+    loop {
+        let promise = reader.read();
+
+        // Await the call. This will return an object { value, done }, where value is a view
+        // containing the new data, and done is a bool indicating that there is nothing left to read
+        let packet: Object = JsFuture::from(promise)
+            .await
+            .expect("failed to read stream chunk")
+            .dyn_into()
+            .expect("stream chunk must be an object");
+        // Simulate the packet dropping. Probabilistically skip processing the packet
+        // Let r be a float in [0,1)
+        let r: f64 = rng.gen();
+        if r < LOSSINESS {
+            // Drop the packet
+            continue;
+        }
+
+
+        let done_reading = obj_get(&packet, &"done".into()).unwrap().as_bool().unwrap();
+
+        // Read a frame and get the underlying bytestring
+        let frame = obj_get(&packet, &"value".into()).unwrap();
 
         // Process the frame data
         let frame_data = get_frame_data(&frame);
