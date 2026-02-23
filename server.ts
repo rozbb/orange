@@ -103,8 +103,10 @@ const kvAssetHandler = createKvAssetHandler(JSON.parse(manifestJSON))
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
 		const assetResponse = await kvAssetHandler(request, env, ctx, build)
-		if (assetResponse) return assetResponse
-		return remixHandler(request, { env, mode })
+		const response = assetResponse ?? (await remixHandler(request, { env, mode }))
+		const manifestUrl = new URL('/build/asset-manifest.json', request.url).href
+		response.headers.set('Integrity-Policy-WAICT-v1', `max-age=0, mode=report, manifest="${manifestUrl}", blocked-destinations=(script style)`)
+		return response
 	},
 	queue,
 }
