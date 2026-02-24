@@ -2,11 +2,12 @@
 
 import { createHash } from 'crypto'
 import { watch } from 'fs'
-import { readdir, readFile, writeFile } from 'fs/promises'
+import { readdir, readFile, unlink, writeFile } from 'fs/promises'
 import { join, relative } from 'path'
 
 const BUILD_DIRS = ['public/build', 'build', 'public/e2ee/wasm-pkg']
-const OUTPUT_FILE = 'public/build/asset-manifest.json'
+const FIXED_OUTPUT_FILE = 'public/build/asset-manifest.json'
+const isWatch = process.argv.includes('--watch')
 
 async function getFilesRecursively(dir, baseDir = dir) {
   const files = []
@@ -22,6 +23,8 @@ async function getFilesRecursively(dir, baseDir = dir) {
     if (entry.isDirectory()) {
       files.push(...(await getFilesRecursively(fullPath, baseDir)))
     } else if (entry.isFile()) {
+      // Skip asset-manifest files to avoid self-reference
+      if (entry.name.startsWith('asset-manifest')) continue
       files.push({
         fullPath,
         relativePath: relative(baseDir, fullPath),
@@ -34,6 +37,22 @@ async function getFilesRecursively(dir, baseDir = dir) {
 async function computeSha256(filePath) {
   const content = await readFile(filePath)
   return createHash('sha256').update(content).digest('base64')
+}
+
+async function cleanOldManifests(keepFile) {
+  try {
+    const entries = await readdir('public/build')
+    for (const entry of entries) {
+      if (entry.startsWith('asset-manifest-') && entry.endsWith('.json')) {
+        const fullPath = join('public/build', entry)
+        if (fullPath !== keepFile) {
+          await unlink(fullPath)
+        }
+      }
+    }
+  } catch {
+    // Directory may not exist
+  }
 }
 
 async function generateManifest() {
@@ -64,19 +83,41 @@ async function generateManifest() {
     wildcard_hashes: [],
   }
 
-  await writeFile(OUTPUT_FILE, JSON.stringify(output, null, 2) + '\n')
+  const jsonContent = JSON.stringify(output, null, 2) + '\n'
+
+  let outputFile
+  if (isWatch) {
+    outputFile = FIXED_OUTPUT_FILE
+  } else {
+    const contentHash = createHash('sha256')
+      .update(jsonContent)
+      .digest('hex')
+      .slice(0, 8)
+    outputFile = `public/build/asset-manifest-${contentHash}.json`
+
+    // Write the URL path for the deploy script to inject via --define
+    await writeFile(
+      'build/asset-manifest-path.txt',
+      `/build/asset-manifest-${contentHash}.json`
+    )
+
+    // Clean up old hash-named manifests
+    await cleanOldManifests(outputFile)
+  }
+
+  await writeFile(outputFile, jsonContent)
 
   const count = Object.keys(hashes).length
-  console.log(`Generated ${OUTPUT_FILE} with ${count} entries`)
+  console.log(`Generated ${outputFile} with ${count} entries`)
 }
 
-if (process.argv.includes('--watch')) {
+if (isWatch) {
   generateManifest()
     .then(() => {
       let timeout
-      const outputBasename = OUTPUT_FILE.split('/').pop()
       const regenerate = (_event, filename) => {
-        if (filename === outputBasename) return
+        // Ignore changes to manifest files to avoid infinite loops
+        if (filename && filename.startsWith('asset-manifest')) return
         clearTimeout(timeout)
         timeout = setTimeout(() => {
           generateManifest().catch((err) => {

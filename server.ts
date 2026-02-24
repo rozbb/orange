@@ -14,6 +14,9 @@ import { queue } from './app/queue'
 
 import type { Env } from '~/types/Env'
 
+// Injected at deploy time via wrangler --define; falls back to fixed path for dev
+declare const __ASSET_MANIFEST_URL__: string
+
 const baseRemixHandler = createRequestHandler(build, mode)
 
 export const remixHandler = (request: Request, env: AppLoadContext) => {
@@ -104,7 +107,8 @@ export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
 		const assetResponse = await kvAssetHandler(request, env, ctx, build)
 		const response = assetResponse ?? (await remixHandler(request, { env, mode }))
-		const manifestUrl = new URL('/build/asset-manifest.json', request.url).href
+		const manifestPath = typeof __ASSET_MANIFEST_URL__ !== 'undefined' ? __ASSET_MANIFEST_URL__ : '/build/asset-manifest.json'
+		const manifestUrl = new URL(manifestPath, request.url).href
 		response.headers.set('Integrity-Policy-WAICT-v1', `max-age=0, mode=report, manifest="${manifestUrl}", blocked-destinations=(script style)`)
 		return response
 	},

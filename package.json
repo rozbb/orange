@@ -14,7 +14,7 @@
 		"clean": "del public/build && del build",
 		"ci-test": "CI=true run-p typecheck test",
 		"remove-sourcemaps": "del public/build/**/*.map",
-		"deploy": "npm run ci-test && npm run build -- --sourcemap && npm run remove-sourcemaps && npm run generate-manifest && wrangler publish --define __RELEASE__:\\\"$(git rev-parse --short HEAD)\\\" --define __SENTRY_DSN__:\\\"$SENTRY_DSN\\\" ${WRANGLER_ARGS:-}",
+		"deploy": "npm run ci-test && npm run build -- --sourcemap && npm run remove-sourcemaps && npm run generate-manifest && wrangler publish --define __RELEASE__:\\\"$(git rev-parse --short HEAD)\\\" --define __SENTRY_DSN__:\\\"$SENTRY_DSN\\\" --define __ASSET_MANIFEST_URL__:\\\"$(cat build/asset-manifest-path.txt)\\\" ${WRANGLER_ARGS:-}",
 		"prettier": "prettier -w .",
 		"typecheck": "tsc --noEmit --skipLibCheck",
 		"typecheck:watch": "npm run typecheck -- --watch",
