@@ -1,30 +1,43 @@
-name = "orange-meets"
+name = "orange-waict-demo"
+
+account_id = "022362f27de5264a50ce60cb23293c9f"
+main = "./build/index.js"
 # https://developers.cloudflare.com/workers/platform/compatibility-dates
 compatibility_date = "2024-10-07"
-main = "./build/index.js"
 compatibility_flags = ["nodejs_compat"]
 
 [site]
   bucket = "./public"
 
-[vars]
-CALLS_APP_ID = "YOUR_CALLS_SFU_APP_ID_HERE"
+[[build.upload.rules]]
+type = "ESModule"
+globs = ["**/*.js"]
 
-# Optional vars
-# OPENAI_MODEL_ENDPOINT = ""
+[route]
+pattern = "orange-waict-demo.cloudflareresearch.com"
+custom_domain = true
+
+[vars]
+CALLS_APP_ID = "c75b5a0e4fd4a2f5791effbe25022766"
+TURN_SERVICE_ID = "f9ca89b874329c4fd7afad91864fc903"
+PUBLIC = "true"
+E2EE_ENABLED = "true"
 
 [[durable_objects.bindings]]
 name = "rooms"
 class_name = "ChatRoom"
 
-# Indicate that you want the ChatRoom class to be callable as Durable Objects.
+# Indicate that you want the ChatRoom and RateLimiter classes to be callable as Durable Objects.
 [[migrations]]
 tag = "v1" # Should be unique for each entry
-new_classes = ["ChatRoom"]
+new_classes = ["ChatRoom", "RateLimiter"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["RateLimiter"] 
 
 # The necessary secrets are:
 # - CALLS_APP_SECRET
-# To add secret, run `echo <VALUE> | wrangler secret put <NAME>`
+# Run `echo <VALUE> | wrangler secret put <NAME>` for each of these
 
-# Optional secrets:
-# OPENAI_API_TOKEN = ""
+
