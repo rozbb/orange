@@ -106,11 +106,31 @@ const kvAssetHandler = createKvAssetHandler(JSON.parse(manifestJSON))
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
 		const assetResponse = await kvAssetHandler(request, env, ctx, build)
-		const response = assetResponse ?? (await remixHandler(request, { env, mode }))
-		const manifestPath = typeof __ASSET_MANIFEST_URL__ !== 'undefined' ? __ASSET_MANIFEST_URL__ : '/build/asset-manifest.json'
+		const response =
+			assetResponse ?? (await remixHandler(request, { env, mode }))
+
+        // We add a WAICT manifest header to all responses
+
+        // Don't modify headers on a status 101 (Switching Protocols) response. This happens when
+        // opening web sockets and it messes with parsing
+		if (response.status === 101) return response
+
+		const manifestPath =
+			typeof __ASSET_MANIFEST_URL__ !== 'undefined'
+				? __ASSET_MANIFEST_URL__
+				: '/build/asset-manifest.json'
 		const manifestUrl = new URL(manifestPath, request.url).href
-		response.headers.set('Integrity-Policy-WAICT-v1', `max-age=0, mode=report, manifest="${manifestUrl}", blocked-destinations=(script style)`)
-		return response
+		const headers = new Headers(response.headers)
+		headers.set(
+			'Integrity-Policy-WAICT-v1',
+			`max-age=0, mode=report, manifest="${manifestUrl}", blocked-destinations=(script style)`
+		)
+
+		return new Response(response.body, {
+			status: response.status,
+			statusText: response.statusText,
+			headers,
+		})
 	},
 	queue,
 }
